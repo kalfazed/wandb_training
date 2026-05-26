@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+
+runs/
+*.pt
+*.ckpt
+wandb/
+lightning_logs/
+.cache/
+
+.vscode/
+.idea/
