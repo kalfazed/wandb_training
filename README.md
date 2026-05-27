@@ -37,8 +37,8 @@ wandb_training/
 └── exercises/
     ├── 01_pure_pytorch/     # ← 当前这一关
     │   └── train.py
-    ├── 02_lightning_module/         (即将加)
-    ├── 03_lightning_datamodule/     (即将加)
+    ├── 02_lightning_module/
+    ├── 03_lightning_datamodule/
     ├── 04_callbacks_wandb/          (即将加)
     ├── 05_trainer_flags/            (即将加)
     ├── 06_custom_callback/          (即将加)
