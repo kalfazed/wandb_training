@@ -1,2 +1,3 @@
 torch>=2.0
 numpy>=1.21
+lightning>=2.0  # used from exercise 02 onwards (`import lightning.pytorch as pl`)
