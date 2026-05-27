@@ -1,0 +1,46 @@
+# Top-level Hydra config for `train.py`.
+#
+# The `defaults` list tells Hydra which YAML files (called "config groups")
+# to merge into this config, in order. Reading from top to bottom:
+#
+#   - bev: default         -> load conf/bev/default.yaml at cfg.bev
+#   - model: default       -> load conf/model/default.yaml at cfg.model
+#   - data: smoke          -> load conf/data/smoke.yaml   at cfg.data
+#   - trainer: default     -> load conf/trainer/default.yaml at cfg.trainer
+#   - callbacks: default   -> load conf/callbacks/default.yaml at cfg.callbacks
+#   - logger: csv_only     -> load conf/logger/csv_only.yaml at cfg.logger
+#   - _self_               -> overlay THIS file LAST (so its keys win)
+#
+# Override any of these from the command line:
+#   python train.py model=big                       # swap whole model group
+#   python train.py model.lr=1e-4                   # override a single value
+#   python train.py data=full trainer=bf16          # swap multiple groups
+#   python train.py -m model.lr=1e-3,5e-4,1e-4      # multi-run sweep
+
+defaults:
+  - bev: default
+  - model: default
+  - data: smoke
+  - trainer: default
+  - callbacks: default
+  - logger: csv_only
+  - _self_
+
+seed: 42
+# `ckpt_path: null` makes resuming optional. Set it on the CLI:
+#   python train.py ckpt_path=runs/08_hydra/.../checkpoints/last.ckpt
+ckpt_path: null
+
+# `hydra:` section controls Hydra itself (output dir, cwd behaviour, sweeps).
+hydra:
+  # Without this, Hydra changes Python's cwd to the output dir on startup,
+  # which breaks every relative path in the rest of the project.
+  job:
+    chdir: false
+  # Per-run output directory (used by ${hydra:runtime.output_dir} below).
+  run:
+    dir: runs/08_hydra_omegaconf/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  # When you use `--multirun` / `-m`, each combination gets a subdir here.
+  sweep:
+    dir: runs/08_hydra_omegaconf/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}

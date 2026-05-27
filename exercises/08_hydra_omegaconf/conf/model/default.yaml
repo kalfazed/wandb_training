@@ -1,0 +1,12 @@
+_target_: _lit.LitBEVDetector
+in_channels: 5
+num_classes: 1
+base_channels: 32
+lr: 1.0e-3
+weight_decay: 1.0e-4
+hm_weight: 1.0
+reg_weight: 0.1
+# `${...}` is OmegaConf variable interpolation. This keeps `epochs` in sync
+# between the Module (for CosineAnnealingLR T_max) and Trainer.max_epochs.
+# Resolved lazily when the config is accessed.
+epochs: ${trainer.max_epochs}

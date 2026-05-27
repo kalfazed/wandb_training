@@ -1,0 +1,4 @@
+# A list of logger specs (Trainer accepts a single Logger or list[Logger]).
+- _target_: lightning.pytorch.loggers.CSVLogger
+  save_dir: ${hydra:runtime.output_dir}
+  name: csv

@@ -1,0 +1,6 @@
+# Inherit everything from `model/default.yaml`, then override one field.
+# A common Hydra idiom for "variants of the same thing".
+defaults:
+  - default
+
+base_channels: 64

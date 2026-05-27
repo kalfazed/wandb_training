@@ -42,8 +42,8 @@ wandb_training/
     ├── 04_callbacks_wandb/
     ├── 05_trainer_flags/
     ├── 06_custom_callback/
-    └── 07_load_predict_resume/     (load / predict / resume)
-    # 08_manual_optimization/       (可选，按需再加)
+    ├── 07_load_predict_resume/     (load / predict / resume)
+    └── 08_hydra_omegaconf/         (Hydra + OmegaConf 配置驱动)
 ```
 
 后续每一关只是新建一个 `exercises/0N_xxx/train.py`，**复用 `nusc_det/` 里的 dataset/model/loss**，让你看到"研究代码不动，工程代码替换"的过程。
@@ -84,4 +84,5 @@ python exercises/01_pure_pytorch/train.py --epochs 50
 | 05 | Trainer flag 一行切换 `precision="bf16-mixed"` / `accumulate_grad_batches` | 体会"工程优化在框架层免费完成" |
 | 06 | 自定义 Callback：dump 预测 BEV heatmap | 理解 hook 系统 |
 | 07 | Checkpoint: load / predict / resume | `load_from_checkpoint`, `trainer.predict`, `trainer.fit(ckpt_path=...)` |
-| 08 *(可选)* | `automatic_optimization=False` + 多 optimizer | 进阶用法，需要时再补 |
+| 08 | Hydra + OmegaConf 配置驱动 | `@hydra.main`、`_target_` + `instantiate`、`defaults` 组合、`${...}` 插值 |
+| 09 *(可选)* | `automatic_optimization=False` + 多 optimizer | 进阶用法，需要时再补 |

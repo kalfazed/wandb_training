@@ -1,0 +1,18 @@
+# `_target_` is THE single most important Hydra pattern.
+# At runtime `hydra.utils.instantiate(cfg.bev)` is equivalent to:
+#
+#     from nusc_det.voxelize import BEVConfig
+#     BEVConfig(x_min=-50.0, x_max=50.0, ..., voxel_size=0.4)
+#
+# i.e. Hydra imports the class by FQCN and calls it with the remaining keys
+# as kwargs. The same trick works for Module, DataModule, Trainer, callbacks,
+# loggers — anything constructable from kwargs.
+
+_target_: nusc_det.voxelize.BEVConfig
+x_min: -50.0
+x_max: 50.0
+y_min: -50.0
+y_max: 50.0
+z_min: -3.0
+z_max: 3.0
+voxel_size: 0.4

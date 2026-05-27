@@ -1,0 +1,15 @@
+# Note: `bev_cfg` is NOT in this file — we inject it manually in train.py:
+#   bev = instantiate(cfg.bev)
+#   dm  = instantiate(cfg.data, bev_cfg=bev)
+# This is intentional: it lets you swap `bev=...` and `data=...` groups
+# independently without one referring to the other.
+
+_target_: _lit.LitBEVDataModule
+data_root: /mnt/data_archive/test/j6gen2/e0305816-afe6-4c89-9b5d-1b8aaab1f8b1
+categories: [car]
+num_classes: 1
+max_points: 60000
+max_frames: 8       # smoke test: first 8 frames only
+val_frames: 2
+batch_size: 1
+num_workers: 0

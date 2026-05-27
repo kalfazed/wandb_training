@@ -1,0 +1,15 @@
+# Hydra can instantiate lightning.pytorch.Trainer too — but we pass
+# `callbacks=...` and `logger=...` manually in train.py because they're
+# their own config groups (easier to swap independently).
+
+_target_: lightning.pytorch.Trainer
+max_epochs: 50
+accelerator: auto
+devices: 1
+gradient_clip_val: 10.0
+log_every_n_steps: 10
+precision: 32-true
+enable_progress_bar: true
+# `${hydra:runtime.output_dir}` resolves to the per-run output folder
+# (set by `hydra.run.dir` in config.yaml).
+default_root_dir: ${hydra:runtime.output_dir}

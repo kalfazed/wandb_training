@@ -1,0 +1,5 @@
+defaults:
+  - smoke
+
+max_frames: null    # `null` -> Python `None` -> use all frames
+num_workers: 4

@@ -1,0 +1,21 @@
+# Entry config for `predict.py`. Smaller than config.yaml: predict only
+# needs bev + data + a checkpoint, no trainer/callbacks/logger.
+
+defaults:
+  - bev: default
+  - data: smoke
+  - _self_
+
+# `???` is OmegaConf's "mandatory missing" marker. The script will crash with
+# a clear error if you forget to provide it. Set it on the CLI:
+#   python predict.py ckpt_path=runs/08_hydra_omegaconf/.../last.ckpt
+ckpt_path: ???
+
+# Where to dump heatmap PNGs (relative to repo root).
+output_dir: runs/08_hydra_omegaconf/predictions
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: runs/08_hydra_omegaconf/predict_${now:%Y-%m-%d_%H-%M-%S}
