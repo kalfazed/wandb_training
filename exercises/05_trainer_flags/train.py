@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """
-Exercise 04 — Built-in Callbacks + WandbLogger (+ a tiny custom callback).
+Exercise 05 — Trainer flags: mixed precision, grad accumulation, multi-GPU.
 
-Everything from ex03 (DataModule / Dataset / Module) is unchanged in *role*.
-The diff is entirely in how we **observe and persist** training:
+ex04 taught *where* logging and checkpoints live (callbacks / loggers).
+ex05 teaches *how Trainer kwargs change training mechanics* without touching
+the research code:
 
-  ex03                                      ex04
-  ----                                      ----
-  CSVLogger only                            WandbLogger (optional) + CSV fallback
-  Trainer default checkpoint (last.ckpt)    ModelCheckpoint(monitor="val/loss")
-  manual self.log("lr", ...)                LearningRateMonitor callback
-  no images                                 LogBEVHeatmapCallback -> wandb panels
+  Pure PyTorch (ex01)                         Lightning (ex05)
+  -------------------                         ----------------
+  torch.cuda.amp.autocast + GradScaler   ->   Trainer(precision="bf16-mixed")
+  loss.backward(); (N times); opt.step() ->   Trainer(accumulate_grad_batches=N)
+  torch.nn.parallel.DistributedDataParallel -> Trainer(devices=K, strategy="ddp")
 
-Research code in ``nusc_det/`` is still untouched.
+Module / DataModule / callbacks are the same *shapes* as ex04.
+Only ``build_trainer(...)`` and CLI flags are the lesson.
 
-When reading messy team code, search for:
-  * ``callbacks=[...]`` on ``Trainer``
-  * ``WandbLogger`` / ``TensorBoardLogger``
-  * classes inheriting ``pl.Callback`` with ``on_*`` methods
-Those three searches find 90% of "where did logging / checkpointing happen?"
+Read messy team code by searching ``Trainer(`` first — half the "magic"
+is in those keyword arguments.
 """
 
 from __future__ import annotations
@@ -80,17 +78,22 @@ class Config:
     max_frames: int | None = None
     val_frames: int = 2
     num_workers: int = 0
-    output_dir: str = "runs/04_callbacks_wandb"
+    batch_size: int = 1
+    output_dir: str = "runs/05_trainer_flags"
 
-    # wandb
-    wandb_project: str = "J6Gen2_BEV_Detection_lightning"
+    wandb_project: str = "wandb_training"
     wandb_run_name: str | None = None
     wandb_entity: str | None = None
     heatmap_log_every_n_epochs: int = 10
 
+    # ex05 — Trainer engineering knobs (defaults chosen for a single-GPU smoke run)
+    precision: str = "auto"  # auto | 32 | 16-mixed | bf16-mixed
+    accumulate_grad_batches: int = 1
+    devices: int = 1
+
 
 # ---------------------------------------------------------------------------
-# Data stack — identical to ex03 (Dataset / collate / DataModule).
+# Data + Module + callbacks — same as ex04 (roles unchanged).
 # ---------------------------------------------------------------------------
 class NuScenesBEVDataset(Dataset):
     def __init__(
@@ -208,7 +211,7 @@ class LitBEVDataModule(pl.LightningDataModule):
 
         print(
             f"[data] train_frames={len(train_indices)} "
-            f"val_frames={len(val_indices)}"
+            f"val_frames={len(val_indices)}  batch_size={self.hparams.batch_size}"
         )
 
     def train_dataloader(self) -> DataLoader:
@@ -293,32 +296,13 @@ class LitBEVDetector(pl.LightningModule):
         }
 
 
-# ---------------------------------------------------------------------------
-# Custom callback — preview of ex06, but minimal: log one val heatmap to wandb.
-#
-# Callback hook order (simplified, one val epoch):
-#   on_validation_epoch_start
-#   for each batch:
-#       on_validation_batch_start
-#       validation_step          (Module)
-#       on_validation_batch_end
-#   on_validation_epoch_end    <- we log images here
-#
-# Built-in callbacks (ModelCheckpoint, LR monitor) hook into the same graph.
-# Order among callbacks = list order on Trainer, unless a callback sets
-# ``priority`` (advanced; rarely needed).
-# ---------------------------------------------------------------------------
 class LogBEVHeatmapCallback(pl.Callback):
-    """Log pred vs GT BEV heatmaps to wandb once every N epochs."""
-
     def __init__(self, log_every_n_epochs: int = 10):
         super().__init__()
         self.log_every_n_epochs = log_every_n_epochs
 
     def _wandb_logger(self, trainer: pl.Trainer):
-        # Trainer may hold a single logger or a list (LoggerCollection).
-        loggers = trainer.loggers if trainer.loggers else []
-        for lg in loggers:
+        for lg in trainer.loggers or []:
             if lg.__class__.__name__ == "WandbLogger":
                 return lg
         return None
@@ -329,11 +313,9 @@ class LogBEVHeatmapCallback(pl.Callback):
             return
         if trainer.sanity_checking:
             return
-
         wb = self._wandb_logger(trainer)
         if wb is None:
             return
-
         val_loader = trainer.datamodule.val_dataloader() if trainer.datamodule else None
         if val_loader is None:
             return
@@ -342,15 +324,14 @@ class LogBEVHeatmapCallback(pl.Callback):
         device = pl_module.device
         bev = batch["bev"].to(device)
         targets = {k: v.to(device) for k, v in batch["targets"].items()}
-
         pl_module.eval()
         outputs = pl_module(bev)
 
         pred_hm = outputs["heatmap"].sigmoid()[0, 0].detach().float().cpu().numpy()
         gt_hm = targets["heatmap"][0, 0].detach().float().cpu().numpy()
         panel = np.concatenate([pred_hm, gt_hm], axis=1)
-
         pcd_name = Path(batch["meta"][0].get("pcd_path", "frame0")).name
+
         import wandb
 
         wb.experiment.log(
@@ -365,9 +346,7 @@ class LogBEVHeatmapCallback(pl.Callback):
 
 
 def build_logger(cfg: Config, out_dir: Path, use_wandb: bool) -> Logger | list[Logger]:
-    """Wandb when available; always keep CSV as a local fallback."""
     loggers: list[Logger] = [CSVLogger(save_dir=str(out_dir), name="csv")]
-
     if use_wandb:
         try:
             from lightning.pytorch.loggers import WandbLogger
@@ -381,10 +360,8 @@ def build_logger(cfg: Config, out_dir: Path, use_wandb: bool) -> Logger | list[L
                     log_model=False,
                 )
             )
-            print(f"[wandb] project={cfg.wandb_project}  run={cfg.wandb_run_name}")
         except ImportError:
-            print("[warn] wandb not installed; use --no-wandb or pip install wandb")
-
+            print("[warn] wandb not installed; use --no-wandb")
     return loggers[0] if len(loggers) == 1 else loggers
 
 
@@ -404,6 +381,110 @@ def build_callbacks(cfg: Config, ckpt_dir: Path, monitor: str) -> list[pl.Callba
     ]
 
 
+# ---------------------------------------------------------------------------
+# ex05 core — resolve Trainer flags with safe fallbacks + print a banner.
+# ---------------------------------------------------------------------------
+def resolve_precision(requested: str) -> str:
+    """Pick a precision string Lightning understands; fall back with a warning."""
+    if requested == "auto":
+        if torch.cuda.is_available():
+            if torch.cuda.is_bf16_supported():
+                return "bf16-mixed"
+            return "16-mixed"
+        return "32-true"
+
+    if requested in ("32", "fp32"):
+        return "32-true"
+
+    if requested in ("16-mixed", "bf16-mixed"):
+        if not torch.cuda.is_available():
+            print(f"[warn] precision={requested} needs CUDA; using 32-true")
+            return "32-true"
+        if requested == "bf16-mixed" and not torch.cuda.is_bf16_supported():
+            print("[warn] GPU has no bf16; falling back to 16-mixed")
+            return "16-mixed"
+        return requested
+
+    raise ValueError(
+        f"Unknown precision={requested!r}. "
+        "Use auto | 32 | 16-mixed | bf16-mixed"
+    )
+
+
+def resolve_strategy(devices: int) -> str:
+    if devices > 1:
+        return "ddp"
+    return "auto"
+
+
+def print_trainer_banner(
+    *,
+    precision: str,
+    accumulate_grad_batches: int,
+    devices: int,
+    strategy: str,
+    batch_size: int,
+    lr: float,
+) -> None:
+    world = max(devices, 1)
+    effective_batch = batch_size * world * accumulate_grad_batches
+    print("[trainer flags]  <-- ex05: change these without editing the Module")
+    print(f"  precision                 = {precision}")
+    print(f"  accumulate_grad_batches   = {accumulate_grad_batches}")
+    print(f"  devices                   = {devices}")
+    print(f"  strategy                  = {strategy}")
+    print(
+        f"  effective batch (approx)  = {batch_size} (per-GPU) "
+        f"x {world} GPU x {accumulate_grad_batches} accum = {effective_batch}"
+    )
+    if accumulate_grad_batches > 1:
+        print(
+            "  note: optimizer.step() runs every "
+            f"{accumulate_grad_batches} training_steps; "
+            "gradients are averaged across micro-batches."
+        )
+    if accumulate_grad_batches > 1 and lr == 1e-3:
+        print(
+            "  tip: larger effective batch often wants a larger LR "
+            "(linear scaling rule) — not applied automatically here."
+        )
+
+
+def build_trainer(
+    cfg: Config,
+    out_dir: Path,
+    ckpt_dir: Path,
+    monitor: str,
+    use_wandb: bool,
+) -> pl.Trainer:
+    precision = resolve_precision(cfg.precision)
+    strategy = resolve_strategy(cfg.devices)
+
+    print_trainer_banner(
+        precision=precision,
+        accumulate_grad_batches=cfg.accumulate_grad_batches,
+        devices=cfg.devices,
+        strategy=strategy,
+        batch_size=cfg.batch_size,
+        lr=cfg.lr,
+    )
+
+    return pl.Trainer(
+        max_epochs=cfg.epochs,
+        accelerator="auto",
+        devices=cfg.devices,
+        strategy=strategy,
+        precision=precision,
+        accumulate_grad_batches=cfg.accumulate_grad_batches,
+        gradient_clip_val=10.0,
+        log_every_n_steps=cfg.log_every,
+        default_root_dir=str(out_dir),
+        logger=build_logger(cfg, out_dir, use_wandb=use_wandb),
+        callbacks=build_callbacks(cfg, ckpt_dir, monitor=monitor),
+        enable_progress_bar=True,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=str, default=Config.data_root)
@@ -414,20 +495,32 @@ def main() -> None:
     parser.add_argument("--max-frames", type=int, default=-1)
     parser.add_argument("--val-frames", type=int, default=Config.val_frames)
     parser.add_argument("--num-workers", type=int, default=Config.num_workers)
+    parser.add_argument("--batch-size", type=int, default=Config.batch_size)
     parser.add_argument("--log-every", type=int, default=Config.log_every)
     parser.add_argument("--wandb-project", type=str, default=Config.wandb_project)
     parser.add_argument("--wandb-run-name", type=str, default=None)
     parser.add_argument("--wandb-entity", type=str, default=None)
+    parser.add_argument("--heatmap-every", type=int, default=Config.heatmap_log_every_n_epochs)
+    parser.add_argument("--no-wandb", action="store_true")
+    # --- ex05 flags ---
     parser.add_argument(
-        "--heatmap-every",
-        type=int,
-        default=Config.heatmap_log_every_n_epochs,
-        help="Log BEV heatmap panel to wandb every N epochs.",
+        "--precision",
+        type=str,
+        default=Config.precision,
+        choices=["auto", "32", "16-mixed", "bf16-mixed"],
+        help="Mixed precision via Trainer (ex01 needed manual autocast+GradScaler).",
     )
     parser.add_argument(
-        "--no-wandb",
-        action="store_true",
-        help="Skip WandbLogger (CSV + local checkpoints still work).",
+        "--accumulate-grad-batches",
+        type=int,
+        default=Config.accumulate_grad_batches,
+        help="Micro-batches per optimizer.step (simulates larger batch).",
+    )
+    parser.add_argument(
+        "--devices",
+        type=int,
+        default=Config.devices,
+        help="GPU count; >1 enables DDP (strategy=ddp).",
     )
     args = parser.parse_args()
 
@@ -441,11 +534,15 @@ def main() -> None:
         max_frames=max_frames,
         val_frames=args.val_frames,
         num_workers=args.num_workers,
+        batch_size=args.batch_size,
         log_every=args.log_every,
         wandb_project=args.wandb_project,
         wandb_run_name=args.wandb_run_name,
         wandb_entity=args.wandb_entity,
         heatmap_log_every_n_epochs=args.heatmap_every,
+        precision=args.precision,
+        accumulate_grad_batches=args.accumulate_grad_batches,
+        devices=args.devices,
     )
 
     out_dir = REPO_ROOT / cfg.output_dir
@@ -455,8 +552,6 @@ def main() -> None:
 
     use_wandb = not args.no_wandb
     monitor = "val/loss" if cfg.val_frames > 0 else "train/loss"
-    if cfg.val_frames == 0:
-        print("[warn] val_frames=0 -> ModelCheckpoint monitors train/loss instead")
 
     datamodule = LitBEVDataModule(
         data_root=cfg.data_root,
@@ -466,7 +561,7 @@ def main() -> None:
         max_points=cfg.max_points,
         max_frames=cfg.max_frames,
         val_frames=cfg.val_frames,
-        batch_size=1,
+        batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
     )
 
@@ -481,25 +576,11 @@ def main() -> None:
         epochs=cfg.epochs,
     )
     print(f"[model] LitBEVDetector  params={sum(p.numel() for p in model.parameters())/1e6:.2f}M")
-    print(f"[bev] grid: {cfg.bev.grid_w} x {cfg.bev.grid_h} (voxel={cfg.bev.voxel_size}m)")
-    print(f"[checkpoint] monitor={monitor}  dir={ckpt_dir}")
 
-    trainer = pl.Trainer(
-        max_epochs=cfg.epochs,
-        accelerator="auto",
-        devices=1,
-        gradient_clip_val=10.0,
-        log_every_n_steps=cfg.log_every,
-        default_root_dir=str(out_dir),
-        logger=build_logger(cfg, out_dir, use_wandb=use_wandb),
-        callbacks=build_callbacks(cfg, ckpt_dir, monitor=monitor),
-        enable_progress_bar=True,
-    )
-
+    trainer = build_trainer(cfg, out_dir, ckpt_dir, monitor, use_wandb)
     trainer.fit(model, datamodule=datamodule)
 
     print(f"[done] artifacts under: {out_dir}")
-    print(f"       best checkpoint: {ckpt_dir}/ (look for best-*.ckpt)")
 
 
 if __name__ == "__main__":

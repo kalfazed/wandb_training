@@ -39,8 +39,8 @@ wandb_training/
     │   └── train.py
     ├── 02_lightning_module/
     ├── 03_lightning_datamodule/
-    ├── 04_callbacks_wandb/          (即将加)
-    ├── 05_trainer_flags/            (即将加)
+    ├── 04_callbacks_wandb/
+    ├── 05_trainer_flags/
     ├── 06_custom_callback/          (即将加)
     └── 07_manual_optimization/      (即将加)
 ```
