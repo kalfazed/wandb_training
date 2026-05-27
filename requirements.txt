@@ -2,3 +2,4 @@ torch>=2.0
 numpy>=1.21
 lightning>=2.0  # used from exercise 02 onwards (`import lightning.pytorch as pl`)
 wandb>=0.15     # exercise 04+ (optional at runtime: use --no-wandb)
+matplotlib>=3.5 # exercise 06+ (heatmap PNG dump)

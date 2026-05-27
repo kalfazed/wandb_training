@@ -41,7 +41,7 @@ wandb_training/
     ├── 03_lightning_datamodule/
     ├── 04_callbacks_wandb/
     ├── 05_trainer_flags/
-    ├── 06_custom_callback/          (即将加)
+    ├── 06_custom_callback/
     └── 07_manual_optimization/      (即将加)
 ```
 
