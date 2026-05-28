@@ -4,3 +4,4 @@ lightning>=2.0  # used from exercise 02 onwards (`import lightning.pytorch as pl
 wandb>=0.15     # exercise 04+ (optional at runtime: use --no-wandb)
 matplotlib>=3.5 # exercise 06+ (heatmap PNG dump)
 hydra-core>=1.3 # exercise 08+ (pulls in omegaconf automatically)
+webdataset>=0.2 # exercise 09+ (tar-shard streaming dataset)
