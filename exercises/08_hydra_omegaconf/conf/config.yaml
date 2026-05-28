@@ -38,9 +38,11 @@ hydra:
   job:
     chdir: false
   # Per-run output directory (used by ${hydra:runtime.output_dir} below).
+  # ${repo_root:} (note trailing colon) calls the custom resolver in _hydra_paths.py
+  # so outputs stay under the repository root (same as ex01–ex07).
   run:
-    dir: runs/08_hydra_omegaconf/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${repo_root:}/runs/08_hydra_omegaconf/${now:%Y-%m-%d}/${now:%H-%M-%S}
   # When you use `--multirun` / `-m`, each combination gets a subdir here.
   sweep:
-    dir: runs/08_hydra_omegaconf/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${repo_root:}/runs/08_hydra_omegaconf/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.num}

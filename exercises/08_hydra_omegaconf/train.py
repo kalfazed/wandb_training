@@ -32,6 +32,10 @@ import lightning.pytorch as pl
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
+from _hydra_paths import register_repo_root_resolver
+
+register_repo_root_resolver()
+
 
 # ---------------------------------------------------------------------------
 # @hydra.main parses CLI, merges YAML files, builds `cfg`, then calls main().

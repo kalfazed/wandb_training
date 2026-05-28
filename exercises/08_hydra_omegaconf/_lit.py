@@ -26,7 +26,22 @@ from nusc_det.dataset import NuScenesLidarDetDataset
 from nusc_det.losses import detection_loss
 from nusc_det.model import BEVDetector
 from nusc_det.targets import build_center_targets
+from omegaconf import OmegaConf
+
 from nusc_det.voxelize import BEVConfig, points_to_bev
+
+
+def _coerce_bev_config(bev_cfg: BEVConfig) -> BEVConfig:
+    """Return a real ``BEVConfig`` instance.
+
+    ``hydra.utils.instantiate`` converts kwargs like ``bev_cfg=...`` into
+    OmegaConf structured nodes. Those nodes only expose dataclass *fields*,
+    not ``@property`` helpers such as ``grid_w`` / ``grid_h``, which
+    ``points_to_bev`` needs.
+    """
+    if type(bev_cfg) is BEVConfig:
+        return bev_cfg
+    return BEVConfig(**OmegaConf.to_container(bev_cfg, resolve=True))
 
 
 class NuScenesBEVDataset(Dataset):
@@ -91,7 +106,7 @@ class LitBEVDataModule(pl.LightningDataModule):
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["bev_cfg"])
-        self.bev_cfg = bev_cfg
+        self.bev_cfg = _coerce_bev_config(bev_cfg)
         self._train_ds: Subset | None = None
         self._val_ds: Subset | None = None
         self._predict_ds: Subset | None = None

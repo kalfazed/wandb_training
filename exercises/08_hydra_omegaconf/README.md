@@ -181,7 +181,7 @@ cd <repo-root>
 python exercises/08_hydra_omegaconf/train.py
 ```
 
-输出目录：`runs/08_hydra_omegaconf/<日期>/<时间>/`，里面会有：
+输出目录：`<repo-root>/runs/08_hydra_omegaconf/<日期>/<时间>/`（与 ex01–ex07 一样在仓库根目录下的 `runs/`，由 conf 里的 `${repo_root:}` 保证（末尾冒号表示调用自定义 resolver，不是读 cfg 里的字段）；在 `ex08` 子目录里执行 `python train.py` 也会写到根目录，不会落在 `exercises/08_hydra_omegaconf/runs/`）。里面会有：
 
 ```
 .hydra/

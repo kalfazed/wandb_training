@@ -18,4 +18,4 @@ hydra:
   job:
     chdir: false
   run:
-    dir: runs/08_hydra_omegaconf/predict_${now:%Y-%m-%d_%H-%M-%S}
+    dir: ${repo_root:}/runs/08_hydra_omegaconf/predict_${now:%Y-%m-%d_%H-%M-%S}

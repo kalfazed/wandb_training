@@ -30,7 +30,10 @@ import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
+from _hydra_paths import register_repo_root_resolver
 from _lit import LitBEVDetector
+
+register_repo_root_resolver()
 
 
 def save_heatmap_png(path: Path, heatmap: np.ndarray) -> None:
